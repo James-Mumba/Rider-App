@@ -14,7 +14,6 @@ import {
   addDoc,
   where,
   serverTimestamp,
-  getDoc,
 } from "firebase/firestore";
 
 function Rider() {
@@ -292,35 +291,6 @@ function Rider() {
     }
   };
 
-  async function fetchUserName(userId) {
-    try {
-      const userDocRef = doc(collection(db, "riderOwners"), userId);
-      const userDoc = await getDoc(userDocRef);
-      if (userDoc.exists()) {
-        return userDoc.data().person;
-      } else {
-        return null;
-      }
-    } catch (error) {
-      console.error("Error fetching user name:", error.message);
-      return null;
-    }
-  }
-
-  // State for username
-  const [username, setUsername] = useState("");
-
-  // Fetch username on mount
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        const name = await fetchUserName(user.uid);
-        setUsername(name || "");
-      }
-    });
-    return () => unsubscribe();
-  }, [auth]);
-
   return (
     <>
       <div className="rider">
@@ -328,9 +298,6 @@ function Rider() {
           <div className="rider-recorder">
             <h4>Add A Rider</h4>
             <div className="form" style={{ position: "relative" }}>
-              <p className="welcome">
-                Welcome <span className="user">{username}</span>{" "}
-              </p>
               <div className="userImage"></div>
               <div className="form-group-input">
                 <input
