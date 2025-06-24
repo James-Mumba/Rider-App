@@ -1,7 +1,7 @@
 // add also a popup that on click of a rider, shows the number of days a certain rider has worked, how much income they have acrued and number of days away from work.
 // have also another popup that displays a list of record of the previous months payments by who and how much in total they brought in. let each driver/ rider have their own record data
 
-import React, { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app, db } from "./Firebase";
 import { useNavigate } from "react-router-dom";
@@ -14,6 +14,7 @@ import {
   addDoc,
   where,
   serverTimestamp,
+  getDoc,
 } from "firebase/firestore";
 
 function Rider() {
@@ -281,6 +282,45 @@ function Rider() {
     setHistoryPage((prev) => prev + delta);
   };
 
+  // Logout function
+  const handleLogout = async () => {
+    try {
+      await auth.signOut();
+      navigate("/Sign");
+    } catch (error) {
+      alert("Logout failed. Please try again.");
+    }
+  };
+
+  async function fetchUserName(userId) {
+    try {
+      const userDocRef = doc(collection(db, "riderOwners"), userId);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        return userDoc.data().person;
+      } else {
+        return null;
+      }
+    } catch (error) {
+      console.error("Error fetching user name:", error.message);
+      return null;
+    }
+  }
+
+  // State for username
+  const [username, setUsername] = useState("");
+
+  // Fetch username on mount
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        const name = await fetchUserName(user.uid);
+        setUsername(name || "");
+      }
+    });
+    return () => unsubscribe();
+  }, [auth]);
+
   return (
     <>
       <div className="rider">
@@ -288,6 +328,9 @@ function Rider() {
           <div className="rider-recorder">
             <h4>Add A Rider</h4>
             <div className="form" style={{ position: "relative" }}>
+              <p className="welcome">
+                Welcome Back <span className="user">{username}</span>{" "}
+              </p>
               <div className="userImage"></div>
               <div className="form-group-input">
                 <input
@@ -324,6 +367,18 @@ function Rider() {
                   Add Rider
                 </button>
               )}
+              <button
+                className="logout-btn"
+                onClick={handleLogout}
+                onMouseOver={(e) =>
+                  (e.currentTarget.style.backgroundColor = "teal")
+                }
+                onMouseOut={(e) =>
+                  (e.currentTarget.style.backgroundColor = "tomato")
+                }
+              >
+                Log Out
+              </button>
             </div>
           </div>
           <div className="rider-list">
@@ -400,7 +455,16 @@ function Rider() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan="8">No riders found.</td>
+                    <td
+                      colSpan="8"
+                      style={{
+                        textAlign: "center",
+                        fontFamily: "fantasy",
+                        fontSize: "24px",
+                      }}
+                    >
+                      No riders found.
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -620,7 +684,7 @@ function Rider() {
                     .filter((rep) => rep.riderId === selectedRider.id)
                     .sort(
                       (a, b) =>
-                        (b.createdAt?.seconds || 0) -
+                        (b.createdAt?.seconds || 0) - 
                         (a.createdAt?.seconds || 0)
                     )
                     .map((rep) => (
@@ -644,7 +708,7 @@ function Rider() {
         )}
         <div className="list-beneath">
           <div className="left">
-            <h4>My Riders</h4>
+            <h4>Records</h4>
             <table
               style={{
                 borderCollapse: "collapse",
@@ -682,48 +746,48 @@ function Rider() {
                   );
                   const expected =
                     (parseInt(rider.income) || 0) * reports.length;
-                    // Calculate balance: expected - totalPaid
-                    let balanceValue = expected - totalPaid;
-                    let balanceDisplay = `Ksh ${balanceValue}`;
-                    let balanceColor = "green";
-                    if (balanceValue > 0) {
-                      balanceColor = "red";
-                    } else if (balanceValue < 0) {
-                      // Overpaid: show + and distribute excess to coming days
-                      balanceColor = "green";
-                      balanceDisplay = `+Ksh ${Math.abs(balanceValue)}`;
-                    }
-                    return (
-                      <tr
-                        key={rider.id}
+                  // Calculate balance: expected - totalPaid
+                  let balanceValue = expected - totalPaid;
+                  let balanceDisplay = `Ksh ${balanceValue}`;
+                  let balanceColor = "green";
+                  if (balanceValue > 0) {
+                    balanceColor = "red";
+                  } else if (balanceValue < 0) {
+                    // Overpaid: show + and distribute excess to coming days
+                    balanceColor = "green";
+                    balanceDisplay = `+Ksh ${Math.abs(balanceValue)}`;
+                  }
+                  return (
+                    <tr
+                      key={rider.id}
+                      style={{
+                        borderBottom: "1px solid #e5e7eb",
+                        cursor: "pointer",
+                        color: "#2563eb",
+                      }}
+                      onClick={() => openHistoryPopup(rider)}
+                      title="View Rider History"
+                    >
+                      <td style={{ padding: "8px" }}>{rider.name}</td>
+                      <td style={{ padding: "8px" }}>{rider.registration}</td>
+                      <td style={{ padding: "8px" }}>Ksh {totalPaid}</td>
+                      <td style={{ padding: "8px" }}>Ksh {expected}</td>
+                      <td
                         style={{
-                          borderBottom: "1px solid #e5e7eb",
-                          cursor: "pointer",
-                          color: "#2563eb",
+                          padding: "8px",
+                          color: balanceColor,
+                          fontWeight: "bold",
                         }}
-                        onClick={() => openHistoryPopup(rider)}
-                        title="View Rider History"
+                        title={
+                          balanceValue < 0
+                            ? "Overpayment will be distributed to future days"
+                            : undefined
+                        }
                       >
-                        <td style={{ padding: "8px" }}>{rider.name}</td>
-                        <td style={{ padding: "8px" }}>{rider.registration}</td>
-                        <td style={{ padding: "8px" }}>Ksh {totalPaid}</td>
-                        <td style={{ padding: "8px" }}>Ksh {expected}</td>
-                        <td
-                          style={{
-                            padding: "8px",
-                            color: balanceColor,
-                            fontWeight: "bold",
-                          }}
-                          title={
-                            balanceValue < 0
-                              ? "Overpayment will be distributed to future days"
-                              : undefined
-                          }
-                        >
-                          {balanceDisplay}
-                        </td>
-                      </tr>
-                    );
+                        {balanceDisplay}
+                      </td>
+                    </tr>
+                  );
                 })}
               </tbody>
             </table>
