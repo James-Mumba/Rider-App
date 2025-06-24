@@ -329,7 +329,7 @@ function Rider() {
             <h4>Add A Rider</h4>
             <div className="form" style={{ position: "relative" }}>
               <p className="welcome">
-                Welcome Back <span className="user">{username}</span>{" "}
+                Welcome <span className="user">{username}</span>{" "}
               </p>
               <div className="userImage"></div>
               <div className="form-group-input">
