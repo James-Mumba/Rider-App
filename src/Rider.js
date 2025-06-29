@@ -14,6 +14,7 @@ import {
   addDoc,
   where,
   serverTimestamp,
+  deleteDoc,
 } from "firebase/firestore";
 
 function Rider() {
@@ -25,8 +26,8 @@ function Rider() {
   const [status, setStatus] = useState("Active");
   const [payment, setPayment] = useState("");
   const [notes, setNotes] = useState("");
+  // const [rideOwnerName, setRideOwnerName] = useState(""); // <-- Removed unused state
   const popupRef = useRef();
-
   const nduthiRiderRef = useRef();
   const nduthiRegRef = useRef();
   const incomeRef = useRef();
@@ -88,10 +89,25 @@ function Rider() {
 
   const deleteRider = async (riderId) => {
     try {
-      await setDoc(doc(db, "riders", riderId), {}, { merge: false });
+      // Delete all riderReports for this rider
+      const reportsQuery = query(
+        collection(db, "riderReports"),
+        where("riderId", "==", riderId)
+      );
+      // Fetch the reports snapshot
+      const reportsSnapshot = await getDocs(reportsQuery);
+      const deletePromises = reportsSnapshot.docs.map((docSnap) =>
+        deleteDoc(docSnap.ref)
+      );
+
+      // Delete the rider document itself
+      deletePromises.push(deleteDoc(doc(db, "riders", riderId)));
+
+      await Promise.all(deletePromises);
+      window.location.reload();
       window.location.reload();
     } catch (error) {
-      console.error("Error deleting rider:", error.message);
+      console.error("Error deleting rider and reports:", error.message);
     }
   };
 
@@ -129,7 +145,7 @@ function Rider() {
     if (status === "Active") {
       const paymentAmount = parseInt(payment);
 
-      if (isNaN(paymentAmount) || paymentAmount <= 0) {
+      if (isNaN(paymentAmount) || paymentAmount <= -1) {
         return alert("Please enter a valid payment amount greater than 0.");
       }
     }
@@ -186,6 +202,59 @@ function Rider() {
     }
   };
 
+  // after 24 hrs, incase no record has been added to a rider, a banlance equal to the income will be added to the rider's balance except for sundays (off days)
+  // This will be done by a cloud function that runs every 24 hrs
+  // Function to add daily balance for riders with no report for today (except Sundays)
+  const addDailyBalanceIfNoReport = async () => {
+    const today = new Date();
+    const dayOfWeek = today.getDay(); // 0 = Sunday
+
+    if (dayOfWeek === 0) return; // Skip Sundays
+
+    try {
+      for (const rider of myRiders) {
+        // Find latest report for this rider
+        const reports = riderReports
+          .filter((rep) => rep.riderId === rider.id && rep.createdAt)
+          .sort(
+            (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+          );
+        const lastReport = reports[0];
+        const lastReportDate = lastReport
+          ? new Date(lastReport.createdAt.seconds * 1000)
+          : null;
+
+        // If no report for today, add a missed payment report
+        if (
+          !lastReportDate ||
+          lastReportDate.getFullYear() !== today.getFullYear() ||
+          lastReportDate.getMonth() !== today.getMonth() ||
+          lastReportDate.getDate() !== today.getDate()
+        ) {
+          // Add a report with status "Missed" and payment = 0, and update balance
+          await addDoc(collection(db, "riderReports"), {
+            riderId: rider.id,
+            name: rider.name,
+            registration: rider.registration,
+            income: rider.income,
+            status: "Missed",
+            payment: 0,
+            notes: "Auto-added: No report submitted for today.",
+            createdAt: serverTimestamp(),
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error auto-adding daily balance:", error.message);
+    }
+  };
+
+  // Call the function once when component mounts (simulate daily run)
+  useEffect(() => {
+    addDailyBalanceIfNoReport();
+    // eslint-disable-next-line
+  }, [myRiders, riderReports]);
+
   // State for controlling the Add Rider button and its position
   const [showAddBtn, setShowAddBtn] = useState(false);
   const [btnPosition, setBtnPosition] = useState({
@@ -217,22 +286,6 @@ function Rider() {
     if (allFieldsFilled()) {
       setBtnPosition({ top: 0, left: 0, position: "static" });
     }
-  };
-
-  // Move button randomly within the form div
-  const moveButton = (e) => {
-    if (allFieldsFilled()) return;
-    const btn = e.currentTarget;
-    const formDiv = btn.closest(".form");
-    if (!formDiv) return;
-    const formRect = formDiv.getBoundingClientRect();
-    const btnRect = btn.getBoundingClientRect();
-    // Calculate max top/left so button stays inside form
-    const maxTop = Math.max(formRect.height - btnRect.height - 10, 0);
-    const maxLeft = Math.max(formRect.width - btnRect.width - 10, 0);
-    const top = Math.random() * maxTop;
-    const left = Math.random() * maxLeft;
-    setBtnPosition({ top, left, position: "absolute" });
   };
 
   // --- Rider History Popup State ---
@@ -328,7 +381,6 @@ function Rider() {
                   className="btn"
                   style={btnPosition}
                   onClick={addRider}
-                  onMouseEnter={moveButton}
                   disabled={!allFieldsFilled()}
                 >
                   Add Rider
@@ -636,41 +688,41 @@ function Rider() {
             </div>
 
             {/* <div className="history">
-              <h5>Payment History</h5>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Status</th>
-                    <th>Paid</th>
-                    <th>Notes</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {riderReports
-                    .filter((rep) => rep.riderId === selectedRider.id)
-                    .sort(
-                      (a, b) =>
+                    <h5>Payment History</h5>
+                    <table>
+                    <thead>
+                      <tr>
+                      <th>Date</th>
+                      <th>Status</th>
+                      <th>Paid</th>
+                      <th>Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {riderReports
+                      .filter((rep) => rep.riderId === selectedRider.id)
+                      .sort(
+                        (a, b) =>
                         (b.createdAt?.seconds || 0) - 
                         (a.createdAt?.seconds || 0)
-                    )
-                    .map((rep) => (
-                      <tr key={rep.id}>
+                      )
+                      .map((rep) => (
+                        <tr key={rep.id}>
                         <td>
                           {rep.createdAt
-                            ? new Date(
-                                rep.createdAt.seconds * 1000
-                              ).toLocaleDateString()
-                            : ""}
+                          ? new Date(
+                            rep.createdAt.seconds * 1000
+                            ).toLocaleDateString()
+                          : ""}
                         </td>
                         <td>{rep.status}</td>
                         <td>{rep.payment}</td>
                         <td>{rep.notes}</td>
-                      </tr>
-                    ))}
-                </tbody>
-              </table>
-            </div> */}
+                        </tr>
+                      ))}
+                    </tbody>
+                    </table>
+                  </div> */}
           </div>
         )}
         <div className="list-beneath">
@@ -704,17 +756,20 @@ function Rider() {
               </thead>
               <tbody>
                 {myRiders.map((rider) => {
+                  // Get all reports for this rider
                   const reports = riderReports.filter(
                     (r) => r.riderId === rider.id
                   );
+                  // Total paid so far
                   const totalPaid = reports.reduce(
                     (sum, r) => sum + (parseInt(r.payment) || 0),
                     0
                   );
-                  const expected =
-                    (parseInt(rider.income) || 0) * reports.length;
-                  // Calculate balance: expected - totalPaid
-                  let balanceValue = expected - totalPaid;
+                  // The agreed upon amount at registration is a constant
+                  const expected = parseInt(rider.income) || 0;
+                  // Calculate balance: expected * number of reports - totalPaid
+                  const totalExpected = expected * reports.length;
+                  let balanceValue = totalExpected - totalPaid;
                   let balanceDisplay = `Ksh ${balanceValue}`;
                   let balanceColor = "green";
                   if (balanceValue > 0) {
