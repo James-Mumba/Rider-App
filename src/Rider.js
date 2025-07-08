@@ -146,7 +146,7 @@ function Rider() {
       const paymentAmount = parseInt(payment);
 
       if (isNaN(paymentAmount) || paymentAmount <= -1) {
-        return alert("Please enter a valid payment amount greater than 0.");
+        return alert("Please enter a valid payment amount greater than -1.");
       }
     }
 
@@ -766,19 +766,43 @@ function Rider() {
                     0
                   );
                   // The agreed upon amount at registration is a constant
-                  const expected = parseInt(rider.income) || 0;
-                  // Calculate balance: expected * number of reports - totalPaid
-                  const totalExpected = expected * reports.length;
-                  let balanceValue = totalExpected - totalPaid;
-                  let balanceDisplay = `Ksh ${balanceValue}`;
-                  let balanceColor = "green";
-                  if (balanceValue > 0) {
+                    const expected = parseInt(rider.income) || 0;
+
+                    // Calculate balance: only "Active" days accrue expected payment
+                    // For "Maintenance" or "Off Duty", no expected payment, so balance for those days is 0
+                    // If there was a previous balance (from underpayment/overpayment), it is carried forward
+                    // We'll accumulate the running balance day by day
+                    let runningBalance = 0;
+                    reports
+                    .sort(
+                      (a, b) =>
+                      (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
+                    )
+                    .forEach((rep) => {
+                      if (rep.status === "Active") {
+                      runningBalance += expected - (parseInt(rep.payment) || 0);
+                      } else if (
+                      rep.status === "Maintenance" ||
+                      rep.status === "Off Duty"
+                      ) {
+                      // No expected payment, so only subtract what was paid (if any)
+                      runningBalance -= parseInt(rep.payment) || 0;
+                      } else {
+                      // For any other status, treat as no expected payment
+                      runningBalance -= parseInt(rep.payment) || 0;
+                      }
+                    });
+
+                    let balanceValue = runningBalance;
+                    let balanceDisplay = `Ksh ${balanceValue}`;
+                    let balanceColor = "green";
+                    if (balanceValue > 0) {
                     balanceColor = "red";
-                  } else if (balanceValue < 0) {
+                    } else if (balanceValue < 0) {
                     // Overpaid: show + and distribute excess to coming days
                     balanceColor = "green";
                     balanceDisplay = `+Ksh ${Math.abs(balanceValue)}`;
-                  }
+                    }
                   return (
                     <tr
                       key={rider.id}
