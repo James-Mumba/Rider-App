@@ -508,75 +508,236 @@ function Rider() {
                   month: "long",
                 }
               );
-              return (
-                <>
-                  <div style={{ marginBottom: 10 }}>
-                    <strong>
-                      {monthName} {year}
-                    </strong>
+                return (
+                <div
+                  style={{
+                  background: "#f3f4f6",
+                  borderRadius: "12px",
+                  padding: "24px 18px",
+                  boxShadow: "0 2px 12px #0001",
+                  minWidth: 350,
+                  }}
+                >
+                  <div
+                  style={{
+                    marginBottom: 18,
+                    fontSize: 20,
+                    fontWeight: 700,
+                    color: "#1e3a8a",
+                    letterSpacing: 1,
+                    textAlign: "center",
+                  }}
+                  >
+                  <span style={{ borderBottom: "2px solid #6366f1" }}>
+                    {monthName} {year}
+                  </span>
                   </div>
-                  <table style={{ width: "100%", marginBottom: 10 }}>
-                    <thead>
-                      <tr>
-                        <th>Date</th>
-                        <th>Status</th>
-                        <th>Paid</th>
-                        <th>Notes</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {reports.map((rep) => (
-                        <tr key={rep.id}>
-                          <td>
-                            {rep.createdAt
-                              ? new Date(
-                                  rep.createdAt.seconds * 1000
-                                ).toLocaleDateString()
-                              : ""}
-                          </td>
-                          <td>{rep.status}</td>
-                          <td>{rep.payment}</td>
-                          <td>{rep.notes}</td>
-                        </tr>
-                      ))}
-                    </tbody>
+                  <table
+                  style={{
+                    width: "100%",
+                    marginBottom: 18,
+                    borderCollapse: "collapse",
+                    background: "#fff",
+                    borderRadius: 8,
+                    overflow: "hidden",
+                    boxShadow: "0 1px 4px #0001",
+                  }}
+                  >
+                  <thead>
+                    <tr style={{ background: "#6366f1", color: "#fff" }}>
+                    <th
+                      style={{
+                      padding: "10px 8px",
+                      borderRight: "1px solid #e5e7eb",
+                      fontWeight: 600,
+                      }}
+                    >
+                      Date
+                    </th>
+                    <th
+                      style={{
+                      padding: "10px 8px",
+                      borderRight: "1px solid #e5e7eb",
+                      fontWeight: 600,
+                      }}
+                    >
+                      Status
+                    </th>
+                    <th
+                      style={{
+                      padding: "10px 8px",
+                      borderRight: "1px solid #e5e7eb",
+                      fontWeight: 600,
+                      }}
+                    >
+                      Paid
+                    </th>
+                    <th style={{ padding: "10px 8px", fontWeight: 600 }}>
+                      Notes
+                    </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reports.map((rep) => (
+                    <tr
+                      key={rep.id}
+                      style={{
+                      background:
+                        rep.status === "Active"
+                        ? "#d1fae5"
+                        : rep.status === "Maintenance"
+                        ? "#fef9c3"
+                        : rep.status === "Off Duty"
+                        ? "#fee2e2"
+                        : "#f3f4f6",
+                      }}
+                    >
+                      <td
+                      style={{
+                        padding: "8px",
+                        borderBottom: "1px solid #e5e7eb",
+                        textAlign: "center",
+                        fontWeight: 500,
+                      }}
+                      >
+                      {rep.createdAt
+                        ? new Date(
+                          rep.createdAt.seconds * 1000
+                        ).toLocaleDateString()
+                        : ""}
+                      </td>
+                      <td
+                      style={{
+                        padding: "8px",
+                        borderBottom: "1px solid #e5e7eb",
+                        textAlign: "center",
+                        fontWeight: 500,
+                        color:
+                        rep.status === "Active"
+                          ? "#059669"
+                          : rep.status === "Maintenance"
+                          ? "#b45309"
+                          : rep.status === "Off Duty"
+                          ? "#dc2626"
+                          : "#374151",
+                      }}
+                      >
+                      {rep.status}
+                      </td>
+                      <td
+                      style={{
+                        padding: "8px",
+                        borderBottom: "1px solid #e5e7eb",
+                        textAlign: "center",
+                        fontWeight: 500,
+                        color:
+                        parseInt(rep.payment) > 0
+                          ? "#2563eb"
+                          : "#6b7280",
+                      }}
+                      >
+                      {rep.payment}
+                      </td>
+                      <td
+                      style={{
+                        padding: "8px",
+                        borderBottom: "1px solid #e5e7eb",
+                        fontSize: "0.98em",
+                        color: "#374151",
+                      }}
+                      >
+                      {rep.notes}
+                      </td>
+                    </tr>
+                    ))}
+                  </tbody>
                   </table>
-                  <div style={{ marginBottom: 10 }}></div>
+                  <div
+                  style={{
+                    marginBottom: 16,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center",
+                    fontSize: 15,
+                  }}
+                  >
                   <span>
-                    <strong>
-                      Days Worked:{" "}
-                      {reports.filter((r) => r.status === "Active").length}
-                    </strong>
-                    {" | "}
-                    <strong>
-                      Off Days:{" "}
-                      {reports.filter((r) => r.status === "Off Duty").length}
-                    </strong>
-                    {" | "}
-                    <strong>
-                      Maintenance:{" "}
-                      {reports.filter((r) => r.status === "Maintenance").length}
+                    <strong style={{ color: "#059669" }}>
+                    Days Worked:{" "}
+                    {reports.filter((r) => r.status === "Active").length}
                     </strong>
                   </span>
-                  <div style={{ display: "flex", gap: 10 }}>
-                    <button
-                      disabled={historyPage <= 1}
-                      onClick={() => handleHistoryPage(-1)}
-                    >
-                      Prev
-                    </button>
-                    <span>
-                      Page {historyPage} of {totalPages}
-                    </span>
-                    <button
-                      disabled={historyPage >= totalPages}
-                      onClick={() => handleHistoryPage(1)}
-                    >
-                      Next
-                    </button>
+                  <span>
+                    <strong style={{ color: "#b45309" }}>
+                    Maintenance:{" "}
+                    {reports.filter((r) => r.status === "Maintenance")
+                      .length}
+                    </strong>
+                  </span>
+                  <span>
+                    <strong style={{ color: "#dc2626" }}>
+                    Off Days:{" "}
+                    {reports.filter((r) => r.status === "Off Duty").length}
+                    </strong>
+                  </span>
                   </div>
-                </>
-              );
+                  <div
+                  style={{
+                    display: "flex",
+                    gap: 12,
+                    justifyContent: "center",
+                    alignItems: "center",
+                    marginTop: 10,
+                  }}
+                  >
+                  <button
+                    disabled={historyPage <= 1}
+                    onClick={() => handleHistoryPage(-1)}
+                    style={{
+                    padding: "7px 18px",
+                    borderRadius: 6,
+                    border: "none",
+                    background: historyPage <= 1 ? "#e5e7eb" : "#6366f1",
+                    color: historyPage <= 1 ? "#6b7280" : "#fff",
+                    fontWeight: 600,
+                    cursor: historyPage <= 1 ? "not-allowed" : "pointer",
+                    transition: "background 0.2s",
+                    }}
+                  >
+                    Prev
+                  </button>
+                  <span
+                    style={{
+                    fontWeight: 600,
+                    color: "#374151",
+                    fontSize: 15,
+                    letterSpacing: 1,
+                    }}
+                  >
+                    Page {historyPage} of {totalPages}
+                  </span>
+                  <button
+                    disabled={historyPage >= totalPages}
+                    onClick={() => handleHistoryPage(1)}
+                    style={{
+                    padding: "7px 18px",
+                    borderRadius: 6,
+                    border: "none",
+                    background:
+                      historyPage >= totalPages ? "#e5e7eb" : "#6366f1",
+                    color:
+                      historyPage >= totalPages ? "#6b7280" : "#fff",
+                    fontWeight: 600,
+                    cursor:
+                      historyPage >= totalPages ? "not-allowed" : "pointer",
+                    transition: "background 0.2s",
+                    }}
+                  >
+                    Next
+                  </button>
+                  </div>
+                </div>
+                );
             })()}
             <div style={{ marginTop: 15 }}>
               <button
