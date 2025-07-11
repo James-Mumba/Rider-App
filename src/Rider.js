@@ -206,14 +206,26 @@ function Rider() {
   // This will be done by a cloud function that runs every 24 hrs
   // Function to add daily balance for riders with no report for today (except Sundays)
   const addDailyBalanceIfNoReport = async () => {
-    const today = new Date();
-    const dayOfWeek = today.getDay(); // 0 = Sunday
+    const now = new Date();
+    const currentHour = now.getHours();
+    const dayOfWeek = now.getDay(); // 0 = Sunday
 
-    if (dayOfWeek === 0) return; // Skip Sundays
+    if (dayOfWeek === 0 || currentHour < 23) return; // Skip Sundays & only run after 11PM
 
     try {
       for (const rider of myRiders) {
-        // Find latest report for this rider
+        // Check if today is a maintenance day
+        const isMaintenance = rider.maintenanceDates?.some((dateStr) => {
+          const date = new Date(dateStr);
+          return (
+            date.getFullYear() === now.getFullYear() &&
+            date.getMonth() === now.getMonth() &&
+            date.getDate() === now.getDate()
+          );
+        });
+        if (isMaintenance) continue;
+
+        // Check if a report exists for today
         const reports = riderReports
           .filter((rep) => rep.riderId === rider.id && rep.createdAt)
           .sort(
@@ -224,22 +236,23 @@ function Rider() {
           ? new Date(lastReport.createdAt.seconds * 1000)
           : null;
 
-        // If no report for today, add a missed payment report
-        if (
-          !lastReportDate ||
-          lastReportDate.getFullYear() !== today.getFullYear() ||
-          lastReportDate.getMonth() !== today.getMonth() ||
-          lastReportDate.getDate() !== today.getDate()
-        ) {
-          // Add a report with status "Missed" and payment = 0, and update balance
+        const hasReportToday =
+          lastReportDate &&
+          lastReportDate.getFullYear() === now.getFullYear() &&
+          lastReportDate.getMonth() === now.getMonth() &&
+          lastReportDate.getDate() === now.getDate();
+
+        if (!hasReportToday) {
+          // No report today: add missed report with daily income as balance
           await addDoc(collection(db, "riderReports"), {
             riderId: rider.id,
             name: rider.name,
             registration: rider.registration,
-            income: rider.income,
-            status: "Missed",
+            income: rider.income, // agreed daily income
+            status: "Auto-Credit",
             payment: 0,
-            notes: "Auto-added: No report submitted for today.",
+            notes:
+              "Auto-added: Rider did not report today, added income to balance.",
             createdAt: serverTimestamp(),
           });
         }
@@ -505,239 +518,240 @@ function Rider() {
               const monthName = new Date(year, m - 1).toLocaleString(
                 "default",
                 {
-                  month: "long",
+                  month: "short",
                 }
               );
-                return (
+              return (
                 <div
                   style={{
-                  background: "#f3f4f6",
-                  borderRadius: "12px",
-                  padding: "24px 18px",
-                  boxShadow: "0 2px 12px #0001",
-                  minWidth: 350,
+                    background: "#f3f4f6",
+                    borderRadius: "12px",
+                    padding: "24px 18px",
+                    boxShadow: "0 2px 12px #0001",
+                    minWidth: 350,
                   }}
                 >
                   <div
-                  style={{
-                    marginBottom: 18,
-                    fontSize: 20,
-                    fontWeight: 700,
-                    color: "#1e3a8a",
-                    letterSpacing: 1,
-                    textAlign: "center",
-                  }}
+                    style={{
+                      marginBottom: 18,
+                      fontSize: 20,
+                      fontWeight: 700,
+                      color: "#1e3a8a",
+                      letterSpacing: 1,
+                      textAlign: "center",
+                    }}
                   >
-                  <span style={{ borderBottom: "2px solid #6366f1" }}>
-                    {monthName} {year}
-                  </span>
+                    <span style={{ borderBottom: "2px solid #6366f1" }}>
+                      {monthName} {year}
+                    </span>
                   </div>
                   <table
-                  style={{
-                    width: "100%",
-                    marginBottom: 18,
-                    borderCollapse: "collapse",
-                    background: "#fff",
-                    borderRadius: 8,
-                    overflow: "hidden",
-                    boxShadow: "0 1px 4px #0001",
-                  }}
+                    style={{
+                      width: "100%",
+                      marginBottom: 18,
+                      borderCollapse: "collapse",
+                      background: "#fff",
+                      borderRadius: 8,
+                      overflow: "hidden",
+                      boxShadow: "0 1px 4px #0001",
+                    }}
                   >
-                  <thead>
-                    <tr style={{ background: "#6366f1", color: "#fff" }}>
-                    <th
-                      style={{
-                      padding: "10px 8px",
-                      borderRight: "1px solid #e5e7eb",
-                      fontWeight: 600,
-                      }}
-                    >
-                      Date
-                    </th>
-                    <th
-                      style={{
-                      padding: "10px 8px",
-                      borderRight: "1px solid #e5e7eb",
-                      fontWeight: 600,
-                      }}
-                    >
-                      Status
-                    </th>
-                    <th
-                      style={{
-                      padding: "10px 8px",
-                      borderRight: "1px solid #e5e7eb",
-                      fontWeight: 600,
-                      }}
-                    >
-                      Paid
-                    </th>
-                    <th style={{ padding: "10px 8px", fontWeight: 600 }}>
-                      Notes
-                    </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reports.map((rep) => (
-                    <tr
-                      key={rep.id}
-                      style={{
-                      background:
-                        rep.status === "Active"
-                        ? "#d1fae5"
-                        : rep.status === "Maintenance"
-                        ? "#fef9c3"
-                        : rep.status === "Off Duty"
-                        ? "#fee2e2"
-                        : "#f3f4f6",
-                      }}
-                    >
-                      <td
-                      style={{
-                        padding: "8px",
-                        borderBottom: "1px solid #e5e7eb",
-                        textAlign: "center",
-                        fontWeight: 500,
-                      }}
-                      >
-                      {rep.createdAt
-                        ? new Date(
-                          rep.createdAt.seconds * 1000
-                        ).toLocaleDateString()
-                        : ""}
-                      </td>
-                      <td
-                      style={{
-                        padding: "8px",
-                        borderBottom: "1px solid #e5e7eb",
-                        textAlign: "center",
-                        fontWeight: 500,
-                        color:
-                        rep.status === "Active"
-                          ? "#059669"
-                          : rep.status === "Maintenance"
-                          ? "#b45309"
-                          : rep.status === "Off Duty"
-                          ? "#dc2626"
-                          : "#374151",
-                      }}
-                      >
-                      {rep.status}
-                      </td>
-                      <td
-                      style={{
-                        padding: "8px",
-                        borderBottom: "1px solid #e5e7eb",
-                        textAlign: "center",
-                        fontWeight: 500,
-                        color:
-                        parseInt(rep.payment) > 0
-                          ? "#2563eb"
-                          : "#6b7280",
-                      }}
-                      >
-                      {rep.payment}
-                      </td>
-                      <td
-                      style={{
-                        padding: "8px",
-                        borderBottom: "1px solid #e5e7eb",
-                        fontSize: "0.98em",
-                        color: "#374151",
-                      }}
-                      >
-                      {rep.notes}
-                      </td>
-                    </tr>
-                    ))}
-                  </tbody>
+                    <thead>
+                      <tr style={{ background: "#6366f1", color: "#fff" }}>
+                        <th
+                          style={{
+                            padding: "10px 8px",
+                            borderRight: "1px solid #e5e7eb",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Date
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 8px",
+                            borderRight: "1px solid #e5e7eb",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Status
+                        </th>
+                        <th
+                          style={{
+                            padding: "10px 8px",
+                            borderRight: "1px solid #e5e7eb",
+                            fontWeight: 600,
+                          }}
+                        >
+                          Paid
+                        </th>
+                        <th style={{ padding: "10px 8px", fontWeight: 600 }}>
+                          Notes
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reports.map((rep) => (
+                        <tr
+                          key={rep.id}
+                          style={{
+                            background:
+                              rep.status === "Active"
+                                ? "#d1fae5"
+                                : rep.status === "Maintenance"
+                                ? "#fef9c3"
+                                : rep.status === "Off Duty"
+                                ? "#fee2e2"
+                                : "#f3f4f6",
+                          }}
+                        >
+                          <td
+                            style={{
+                              padding: "8px",
+                              borderBottom: "1px solid #e5e7eb",
+                              textAlign: "center",
+                              fontWeight: 500,
+                            }}
+                          >
+                            {rep.createdAt
+                              ? new Date(
+                                  rep.createdAt.seconds * 1000
+                                ).toLocaleDateString()
+                              : ""}
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px",
+                              borderBottom: "1px solid #e5e7eb",
+                              textAlign: "center",
+                              fontWeight: 500,
+                              color:
+                                rep.status === "Active"
+                                  ? "#059669"
+                                  : rep.status === "Maintenance"
+                                  ? "#b45309"
+                                  : rep.status === "Off Duty"
+                                  ? "#dc2626"
+                                  : "#374151",
+                            }}
+                          >
+                            {rep.status}
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px",
+                              borderBottom: "1px solid #e5e7eb",
+                              textAlign: "center",
+                              fontWeight: 500,
+                              color:
+                                parseInt(rep.payment) > 0
+                                  ? "#2563eb"
+                                  : "#6b7280",
+                            }}
+                          >
+                            {rep.payment}
+                          </td>
+                          <td
+                            style={{
+                              padding: "8px",
+                              borderBottom: "1px solid #e5e7eb",
+                              fontSize: "0.98em",
+                              color: "#374151",
+                            }}
+                          >
+                            {rep.notes}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                   <div
-                  style={{
-                    marginBottom: 16,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                    fontSize: 15,
-                  }}
+                    style={{
+                      marginBottom: 16,
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      fontSize: 15,
+                    }}
                   >
-                  <span>
-                    <strong style={{ color: "#059669" }}>
-                    Days Worked:{" "}
-                    {reports.filter((r) => r.status === "Active").length}
-                    </strong>
-                  </span>
-                  <span>
-                    <strong style={{ color: "#b45309" }}>
-                    Maintenance:{" "}
-                    {reports.filter((r) => r.status === "Maintenance")
-                      .length}
-                    </strong>
-                  </span>
-                  <span>
-                    <strong style={{ color: "#dc2626" }}>
-                    Off Days:{" "}
-                    {reports.filter((r) => r.status === "Off Duty").length}
-                    </strong>
-                  </span>
+                    <span>
+                      <strong style={{ color: "#059669" }}>
+                        Days Worked:{" "}
+                        {reports.filter((r) => r.status === "Active").length}
+                      </strong>
+                    </span>
+                    <span>
+                      <strong style={{ color: "#b45309" }}>
+                        Maintenance:{" "}
+                        {
+                          reports.filter((r) => r.status === "Maintenance")
+                            .length
+                        }
+                      </strong>
+                    </span>
+                    <span>
+                      <strong style={{ color: "#dc2626" }}>
+                        Off Days:{" "}
+                        {reports.filter((r) => r.status === "Off Duty").length}
+                      </strong>
+                    </span>
                   </div>
                   <div
-                  style={{
-                    display: "flex",
-                    gap: 12,
-                    justifyContent: "center",
-                    alignItems: "center",
-                    marginTop: 10,
-                  }}
-                  >
-                  <button
-                    disabled={historyPage <= 1}
-                    onClick={() => handleHistoryPage(-1)}
                     style={{
-                    padding: "7px 18px",
-                    borderRadius: 6,
-                    border: "none",
-                    background: historyPage <= 1 ? "#e5e7eb" : "#6366f1",
-                    color: historyPage <= 1 ? "#6b7280" : "#fff",
-                    fontWeight: 600,
-                    cursor: historyPage <= 1 ? "not-allowed" : "pointer",
-                    transition: "background 0.2s",
+                      display: "flex",
+                      gap: 12,
+                      justifyContent: "center",
+                      alignItems: "center",
+                      marginTop: 10,
                     }}
                   >
-                    Prev
-                  </button>
-                  <span
-                    style={{
-                    fontWeight: 600,
-                    color: "#374151",
-                    fontSize: 15,
-                    letterSpacing: 1,
-                    }}
-                  >
-                    Page {historyPage} of {totalPages}
-                  </span>
-                  <button
-                    disabled={historyPage >= totalPages}
-                    onClick={() => handleHistoryPage(1)}
-                    style={{
-                    padding: "7px 18px",
-                    borderRadius: 6,
-                    border: "none",
-                    background:
-                      historyPage >= totalPages ? "#e5e7eb" : "#6366f1",
-                    color:
-                      historyPage >= totalPages ? "#6b7280" : "#fff",
-                    fontWeight: 600,
-                    cursor:
-                      historyPage >= totalPages ? "not-allowed" : "pointer",
-                    transition: "background 0.2s",
-                    }}
-                  >
-                    Next
-                  </button>
+                    <button
+                      disabled={historyPage <= 1}
+                      onClick={() => handleHistoryPage(-1)}
+                      style={{
+                        padding: "7px 18px",
+                        borderRadius: 6,
+                        border: "none",
+                        background: historyPage <= 1 ? "#e5e7eb" : "#6366f1",
+                        color: historyPage <= 1 ? "#6b7280" : "#fff",
+                        fontWeight: 600,
+                        cursor: historyPage <= 1 ? "not-allowed" : "pointer",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      Prev
+                    </button>
+                    <span
+                      style={{
+                        fontWeight: 600,
+                        color: "#374151",
+                        fontSize: 15,
+                        letterSpacing: 1,
+                      }}
+                    >
+                      Page {historyPage} of {totalPages}
+                    </span>
+                    <button
+                      disabled={historyPage >= totalPages}
+                      onClick={() => handleHistoryPage(1)}
+                      style={{
+                        padding: "7px 18px",
+                        borderRadius: 6,
+                        border: "none",
+                        background:
+                          historyPage >= totalPages ? "#e5e7eb" : "#6366f1",
+                        color: historyPage >= totalPages ? "#6b7280" : "#fff",
+                        fontWeight: 600,
+                        cursor:
+                          historyPage >= totalPages ? "not-allowed" : "pointer",
+                        transition: "background 0.2s",
+                      }}
+                    >
+                      Next
+                    </button>
                   </div>
                 </div>
-                );
+              );
             })()}
             <div style={{ marginTop: 15 }}>
               <button
@@ -927,43 +941,45 @@ function Rider() {
                     0
                   );
                   // The agreed upon amount at registration is a constant
-                    const expected = parseInt(rider.income) || 0;
+                  const expected = parseInt(rider.income) || 0;
 
-                    // Calculate balance: only "Active" days accrue expected payment
-                    // For "Maintenance" or "Off Duty", no expected payment, so balance for those days is 0
-                    // If there was a previous balance (from underpayment/overpayment), it is carried forward
-                    // We'll accumulate the running balance day by day
-                    let runningBalance = 0;
-                    reports
+                  // Calculate balance: only "Active" days accrue expected payment
+                  // For "Maintenance" or "Off Duty", no expected payment, so balance for those days is 0
+                  // If there was a previous balance (from underpayment/overpayment), it is carried forward
+                  // We'll accumulate the running balance day by day
+                  let runningBalance = 0;
+                  reports
                     .sort(
                       (a, b) =>
-                      (a.createdAt?.seconds || 0) - (b.createdAt?.seconds || 0)
+                        (a.createdAt?.seconds || 0) -
+                        (b.createdAt?.seconds || 0)
                     )
                     .forEach((rep) => {
                       if (rep.status === "Active") {
-                      runningBalance += expected - (parseInt(rep.payment) || 0);
+                        runningBalance +=
+                          expected - (parseInt(rep.payment) || 0);
                       } else if (
-                      rep.status === "Maintenance" ||
-                      rep.status === "Off Duty"
+                        rep.status === "Maintenance" ||
+                        rep.status === "Off Duty"
                       ) {
-                      // No expected payment, so only subtract what was paid (if any)
-                      runningBalance -= parseInt(rep.payment) || 0;
+                        // No expected payment, so only subtract what was paid (if any)
+                        runningBalance -= parseInt(rep.payment) || 0;
                       } else {
-                      // For any other status, treat as no expected payment
-                      runningBalance -= parseInt(rep.payment) || 0;
+                        // For any other status, treat as no expected payment
+                        runningBalance -= parseInt(rep.payment) || 0;
                       }
                     });
 
-                    let balanceValue = runningBalance;
-                    let balanceDisplay = `Ksh ${balanceValue}`;
-                    let balanceColor = "green";
-                    if (balanceValue > 0) {
+                  let balanceValue = runningBalance;
+                  let balanceDisplay = `Ksh ${balanceValue}`;
+                  let balanceColor = "green";
+                  if (balanceValue > 0) {
                     balanceColor = "red";
-                    } else if (balanceValue < 0) {
+                  } else if (balanceValue < 0) {
                     // Overpaid: show + and distribute excess to coming days
                     balanceColor = "green";
                     balanceDisplay = `+Ksh ${Math.abs(balanceValue)}`;
-                    }
+                  }
                   return (
                     <tr
                       key={rider.id}
