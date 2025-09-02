@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getAuth, onAuthStateChanged } from "firebase/auth";
 import { app, db } from "./Firebase";
+import { useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   collection,
@@ -205,12 +206,15 @@ function Rider() {
   // after 24 hrs, incase no record has been added to a rider, a banlance equal to the income will be added to the rider's balance except for sundays (off days)
   // This will be done by a cloud function that runs every 24 hrs
   // Function to add daily balance for riders with no report for today (except Sundays)
-  const addDailyBalanceIfNoReport = async () => {
+  const addDailyChargeForUnpaidRiders = useCallback(async () => {
     const now = new Date();
-    const currentHour = now.getHours();
-    const dayOfWeek = now.getDay(); // 0 = Sunday
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const dayOfWeek = today.getDay(); // 0 = Sunday
 
-    if (dayOfWeek === 0 || currentHour < 23) return; // Skip Sundays & only run after 11PM
+    if (dayOfWeek === 0) {
+      console.log("Skipping charges for Sunday.");
+      return; // Skip Sundays
+    }
 
     try {
       for (const rider of myRiders) {
@@ -218,12 +222,15 @@ function Rider() {
         const isMaintenance = rider.maintenanceDates?.some((dateStr) => {
           const date = new Date(dateStr);
           return (
-            date.getFullYear() === now.getFullYear() &&
-            date.getMonth() === now.getMonth() &&
-            date.getDate() === now.getDate()
+            date.getFullYear() === today.getFullYear() &&
+            date.getMonth() === today.getMonth() &&
+            date.getDate() === today.getDate()
           );
         });
-        if (isMaintenance) continue;
+        if (isMaintenance) {
+          console.log(`Skipping rider ${rider.name} (Maintenance Day).`);
+          continue;
+        }
 
         // Check if a report exists for today
         const reports = riderReports
@@ -238,35 +245,51 @@ function Rider() {
 
         const hasReportToday =
           lastReportDate &&
-          lastReportDate.getFullYear() === now.getFullYear() &&
-          lastReportDate.getMonth() === now.getMonth() &&
-          lastReportDate.getDate() === now.getDate();
+          lastReportDate.getFullYear() === today.getFullYear() &&
+          lastReportDate.getMonth() === today.getMonth() &&
+          lastReportDate.getDate() === today.getDate();
 
         if (!hasReportToday) {
-          // No report today: add missed report with daily income as balance
+          // No report today: add missed report with daily income as charge
           await addDoc(collection(db, "riderReports"), {
             riderId: rider.id,
             name: rider.name,
             registration: rider.registration,
             income: rider.income, // agreed daily income
-            status: "Auto-Credit",
+            status: "Auto-Charge",
             payment: 0,
-            notes:
-              "Auto-added: Rider did not report today, added income to balance.",
+            notes: "Auto-charged: No payment received for today.",
             createdAt: serverTimestamp(),
           });
+          console.log(
+            `Auto-charged rider ${rider.name} for missing today's payment.`
+          );
         }
       }
     } catch (error) {
-      console.error("Error auto-adding daily balance:", error.message);
+      console.error("Error auto-charging unpaid riders:", error.message);
     }
-  };
+  }, [myRiders, riderReports]); // Use useCallback and add dependencies
 
-  // Call the function once when component mounts (simulate daily run)
+  // Schedule the function to run daily at 9 PM
   useEffect(() => {
-    addDailyBalanceIfNoReport();
-    // eslint-disable-next-line
-  }, [myRiders, riderReports]);
+    const now = new Date();
+    const millisTill9PM =
+      new Date(now.getFullYear(), now.getMonth(), now.getDate(), 21, 0, 0, 0) -
+      now;
+
+    if (millisTill9PM > 0) {
+      setTimeout(() => {
+        addDailyChargeForUnpaidRiders();
+      }, millisTill9PM);
+    } else {
+      // If it's past 9 PM, schedule for the next day
+      setTimeout(() => {
+        addDailyChargeForUnpaidRiders();
+      }, millisTill9PM + 24 * 60 * 60 * 1000);
+    }
+  }, [addDailyChargeForUnpaidRiders]); // Include the function in the dependency array
+
 
   // State for controlling the Add Rider button and its position
   const [showAddBtn, setShowAddBtn] = useState(false);
