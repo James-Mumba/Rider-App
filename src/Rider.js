@@ -256,7 +256,7 @@ function Rider() {
             name: rider.name,
             registration: rider.registration,
             income: rider.income, // agreed daily income
-            status: "Auto-Charge",
+            status: "Active",
             payment: 0,
             notes: "Auto-charged: No payment received for today.",
             createdAt: serverTimestamp(),
