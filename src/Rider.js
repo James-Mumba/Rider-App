@@ -256,9 +256,9 @@ function Rider() {
             name: rider.name,
             registration: rider.registration,
             income: rider.income, // agreed daily income
-            status: "Active",
+            status: "Auto-Charge",
             payment: 0,
-            notes: "Auto-charged: No payment received for today.",
+            notes: "No payment received for today.",
             createdAt: serverTimestamp(),
           });
           console.log(
@@ -289,7 +289,6 @@ function Rider() {
       }, millisTill9PM + 24 * 60 * 60 * 1000);
     }
   }, [addDailyChargeForUnpaidRiders]); // Include the function in the dependency array
-
 
   // State for controlling the Add Rider button and its position
   const [showAddBtn, setShowAddBtn] = useState(false);
@@ -330,31 +329,49 @@ function Rider() {
   const [historyRider, setHistoryRider] = useState(null);
 
   // Helper: Get paginated monthly reports for a rider
-  const getMonthlyReports = (riderId, page = 1) => {
-    // Group by month/year
+  // const getMonthlyReports = (riderId, page = 1) => {
+  //   // Group by month/year
+  //   const reports = riderReports
+  //     .filter((rep) => rep.riderId === riderId && rep.createdAt)
+  //     .sort(
+  //       (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
+  //     );
+
+  //   // Group by month
+  //   const months = {};
+  //   reports.forEach((rep) => {
+  //     const date = new Date(rep.createdAt.seconds * 1000);
+  //     const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+  //     if (!months[key]) months[key] = [];
+  //     months[key].push(rep);
+  //   });
+
+  //   // Convert to array of months, newest first
+  //   const monthKeys = Object.keys(months).sort((a, b) => (a < b ? 1 : -1));
+  //   // 1 month per page
+  //   const pagedKey = monthKeys[page - 1];
+  //   return {
+  //     month: pagedKey,
+  //     reports: pagedKey ? months[pagedKey] : [],
+  //     totalPages: monthKeys.length,
+  //   };
+  // };
+
+  // Helper: Get paginated weekly reports for a rider
+  //note that i have used get monthly reports but it is actually weekly reports
+  const getWeeklyReports = (riderId, page = 1) => {
     const reports = riderReports
       .filter((rep) => rep.riderId === riderId && rep.createdAt)
       .sort(
         (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
       );
 
-    // Group by month
-    const months = {};
-    reports.forEach((rep) => {
-      const date = new Date(rep.createdAt.seconds * 1000);
-      const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
-      if (!months[key]) months[key] = [];
-      months[key].push(rep);
-    });
+    const startIndex = (page - 1) * 7; // 7 entries per week
+    const pagedReports = reports.slice(startIndex, startIndex + 7);
 
-    // Convert to array of months, newest first
-    const monthKeys = Object.keys(months).sort((a, b) => (a < b ? 1 : -1));
-    // 1 month per page
-    const pagedKey = monthKeys[page - 1];
     return {
-      month: pagedKey,
-      reports: pagedKey ? months[pagedKey] : [],
-      totalPages: monthKeys.length,
+      reports: pagedReports,
+      totalPages: Math.ceil(reports.length / 7),
     };
   };
 
@@ -379,6 +396,20 @@ function Rider() {
       alert("Logout failed. Please try again.");
     }
   };
+
+  // Close popup when clicking Escape
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "Escape") {
+        setShowPopup(false);
+        setShowHistoryPopup(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   return (
     <>
@@ -529,45 +560,29 @@ function Rider() {
 
         {/* Rider History Popup */}
         {showHistoryPopup && historyRider && (
-          <div className="popup-recorder" ref={popupRef}>
-            <h4>{historyRider.name}'s Monthly History</h4>
+          <div
+            className="popup-recorder"
+            ref={popupRef}
+            style={{
+              maxWidth: "40%",
+              maxHeight: "90%",
+              overflow: "auto",
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "24px 18px",
+              boxShadow: "0 2px 12px #0001",
+            }}
+          >
+            <h4>{historyRider.name}'s Weekly History</h4>
             {(() => {
-              const { month, reports, totalPages } = getMonthlyReports(
+              const { reports, totalPages } = getWeeklyReports(
                 historyRider.id,
                 historyPage
               );
-              if (!month) return <p>No history found.</p>;
-              const [year, m] = month.split("-");
-              const monthName = new Date(year, m - 1).toLocaleString(
-                "default",
-                {
-                  month: "short",
-                }
-              );
+              if (!reports.length) return <p>No history found.</p>;
+
               return (
-                <div
-                  style={{
-                    background: "#f3f4f6",
-                    borderRadius: "12px",
-                    padding: "24px 18px",
-                    boxShadow: "0 2px 12px #0001",
-                    minWidth: 350,
-                  }}
-                >
-                  <div
-                    style={{
-                      marginBottom: 18,
-                      fontSize: 20,
-                      fontWeight: 700,
-                      color: "#1e3a8a",
-                      letterSpacing: 1,
-                      textAlign: "center",
-                    }}
-                  >
-                    <span style={{ borderBottom: "2px solid #6366f1" }}>
-                      {monthName} {year}
-                    </span>
-                  </div>
+                <div>
                   <table
                     style={{
                       width: "100%",
@@ -577,6 +592,7 @@ function Rider() {
                       borderRadius: 8,
                       overflow: "hidden",
                       boxShadow: "0 1px 4px #0001",
+                      fontSize: "0.9em", // Shrink table font size
                     }}
                   >
                     <thead>
@@ -690,40 +706,8 @@ function Rider() {
                   </table>
                   <div
                     style={{
-                      marginBottom: 16,
                       display: "flex",
                       justifyContent: "space-between",
-                      alignItems: "center",
-                      fontSize: 15,
-                    }}
-                  >
-                    <span>
-                      <strong style={{ color: "#059669" }}>
-                        Days Worked:{" "}
-                        {reports.filter((r) => r.status === "Active").length}
-                      </strong>
-                    </span>
-                    <span>
-                      <strong style={{ color: "#b45309" }}>
-                        Maintenance:{" "}
-                        {
-                          reports.filter((r) => r.status === "Maintenance")
-                            .length
-                        }
-                      </strong>
-                    </span>
-                    <span>
-                      <strong style={{ color: "#dc2626" }}>
-                        Off Days:{" "}
-                        {reports.filter((r) => r.status === "Off Duty").length}
-                      </strong>
-                    </span>
-                  </div>
-                  <div
-                    style={{
-                      display: "flex",
-                      gap: 12,
-                      justifyContent: "center",
                       alignItems: "center",
                       marginTop: 10,
                     }}
@@ -742,7 +726,7 @@ function Rider() {
                         transition: "background 0.2s",
                       }}
                     >
-                      Prev
+                      Prev Week
                     </button>
                     <span
                       style={{
@@ -752,7 +736,7 @@ function Rider() {
                         letterSpacing: 1,
                       }}
                     >
-                      Page {historyPage} of {totalPages}
+                      Week {historyPage} of {totalPages}
                     </span>
                     <button
                       disabled={historyPage >= totalPages}
@@ -770,7 +754,7 @@ function Rider() {
                         transition: "background 0.2s",
                       }}
                     >
-                      Next
+                      Next Week
                     </button>
                   </div>
                 </div>
@@ -780,6 +764,16 @@ function Rider() {
               <button
                 className="close-btn"
                 onClick={() => setShowHistoryPopup(false)}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 6,
+                  border: "none",
+                  background: "#ef4444",
+                  color: "#fff",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  transition: "background 0.2s",
+                }}
               >
                 Close
               </button>
