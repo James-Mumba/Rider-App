@@ -972,7 +972,7 @@ function Rider() {
                         (b.createdAt?.seconds || 0)
                     )
                     .forEach((rep) => {
-                      if (rep.status === "Active") {
+                      if (rep.status === "Active" || rep.status === "Auto-Charge") {
                         runningBalance +=
                           expected - (parseInt(rep.payment) || 0);
                       } else if (
